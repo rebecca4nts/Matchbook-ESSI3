@@ -38,9 +38,22 @@ Projeto desenvolvido para a disciplina de **Engenharia de Software para Sistemas
 
 1. **Clone o repositório:**
    ```bash
-   git clone [https://github.com/rebecca4nts/Projeto-Matchbook.git](https://github.com/rebecca4nts/Projeto-Matchbook.git)
-   cd Projeto-Matchbook
+   git clone [git@github.com:rebecca4nts/Matchbook-ESSI3.git](https://github.com/rebecca4nts/Matchbook-ESSI3.git)
+   cd Matchbook-ESSI3
+   ```
 
 2. **Instale as Dependências:**
    ```bash
    npm install
+   ```
+
+3. **Configure as variáveis de ambiente:**
+   Copie o arquivo `.env.local` fornecido pelo time e cole na raiz do projeto. Ele contém as credenciais do Firebase necessárias para o funcionamento da aplicação.
+
+4. **Inicie o servidor de desenvolvimento:**
+   ```bash
+   npm run dev
+   ```
+
+5. **Acesse a aplicação:**
+   Acesse [http://localhost:3000](http://localhost:3000) no navegador.
