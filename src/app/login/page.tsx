@@ -53,7 +53,7 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-50 px-8">
+    <div className="flex min-h-screen items-center justify-center bg-cover bg-center bg-no-repeat px-8" style={{backgroundImage: "url('/bg-login.jpg')"}}>
       <div className="w-full max-w-md rounded-lg bg-white p-8 shadow-md">
         <h1 className="mb-6 text-center text-2xl font-bold text-gray-900">
           {isSignUp ? "Criar conta" : "Entrar"}
