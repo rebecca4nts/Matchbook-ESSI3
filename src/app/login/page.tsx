@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { useRouter } from "next/navigation";
 import LocationInput from "@/components/LocationInput";
@@ -10,26 +10,43 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
   const [location, setLocation] = useState("");
+  const [city, setCity] = useState("");
+  const [state, setState] = useState("");
   const [isSignUp, setIsSignUp] = useState(false);
   const [error, setError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
-  const { signInWithEmail, signUpWithEmail, signInWithGoogle, user } = useAuth();
+  const { signInWithEmail, signUpWithEmail, signInWithGoogle, user, loading: authLoading } = useAuth();
   const router = useRouter();
 
-  if (user) {
-    router.push("/dashboard");
-    return null;
-  }
+  useEffect(() => {
+    if (!authLoading && user) router.replace("/dashboard");
+  }, [authLoading, router, user]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    const nextErrors: Record<string, string> = {};
+    const normalizedEmail = email.trim().toLowerCase();
+
+    if (!normalizedEmail) nextErrors.email = "E-mail é obrigatório.";
+    else if (!/^\S+@\S+\.\S+$/.test(normalizedEmail)) nextErrors.email = "Por favor, insira um e-mail válido";
+    if (!password) nextErrors.password = "Senha é obrigatória.";
+    if (isSignUp) {
+      if (!name.trim()) nextErrors.name = "Nome é obrigatório.";
+      if (!city || !state || !location) nextErrors.location = "Selecione uma cidade e estado da lista.";
+      if (password && (!/(?=.*[A-Za-z])(?=.*\d)(?=.*[^A-Za-z\d])/.test(password) || password.length < 8)) {
+        nextErrors.password = "A senha deve ter pelo menos 8 caracteres, letra, número e caractere especial.";
+      }
+    }
+    setFieldErrors(nextErrors);
+    if (Object.keys(nextErrors).length) return;
     setLoading(true);
     try {
       if (isSignUp) {
-        await signUpWithEmail(email, password, { displayName: name, location });
+        await signUpWithEmail(normalizedEmail, password, { displayName: name.trim(), city, state });
       } else {
-        await signInWithEmail(email, password);
+        await signInWithEmail(normalizedEmail, password);
       }
       router.push("/dashboard");
     } catch (err: unknown) {
@@ -52,20 +69,24 @@ export default function LoginPage() {
     }
   };
 
+  if (authLoading || user) {
+    return <div className="grid min-h-screen place-items-center bg-gray-50 text-gray-700">Carregando...</div>;
+  }
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-cover bg-center bg-no-repeat px-8" style={{backgroundImage: "url('/bg-login.jpg')"}}>
+    <div className="flex min-h-screen items-center justify-center bg-gray-50 px-8">
       <div className="w-full max-w-md rounded-lg bg-white p-8 shadow-md">
         <h1 className="mb-6 text-center text-2xl font-bold text-gray-900">
           {isSignUp ? "Criar conta" : "Entrar"}
         </h1>
 
         {error && (
-          <div className="mb-4 rounded-md bg-red-50 p-3 text-sm text-red-600">
+          <div role="alert" className="mb-4 rounded-md bg-red-50 p-3 text-sm text-red-700">
             {error}
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form noValidate onSubmit={handleSubmit} className="space-y-4">
           {isSignUp && (
             <>
               <div>
@@ -77,9 +98,10 @@ export default function LoginPage() {
                   type="text"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  required
+                  aria-invalid={Boolean(fieldErrors.name)}
                   className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                 />
+                {fieldErrors.name && <p className="mt-1 text-sm text-red-600">{fieldErrors.name}</p>}
               </div>
 
               <div>
@@ -88,9 +110,14 @@ export default function LoginPage() {
                 </label>
                 <LocationInput
                   value={location}
-                  onChange={(value) => setLocation(value)}
-                  required
+                  onChange={(value, selectedLocation) => {
+                    setLocation(value);
+                    setCity(selectedLocation?.city || "");
+                    setState(selectedLocation?.stateCode || "");
+                    setFieldErrors((current) => ({ ...current, location: "" }));
+                  }}
                 />
+                {fieldErrors.location && <p className="mt-1 text-sm text-red-600">{fieldErrors.location}</p>}
               </div>
             </>
           )}
@@ -103,10 +130,14 @@ export default function LoginPage() {
               id="email"
               type="email"
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
+              onChange={(e) => {
+                setEmail(e.target.value);
+                setFieldErrors((current) => ({ ...current, email: "" }));
+              }}
+              aria-invalid={Boolean(fieldErrors.email)}
               className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             />
+            {fieldErrors.email && <p className="mt-1 text-sm text-red-600">{fieldErrors.email}</p>}
           </div>
 
           <div>
@@ -117,10 +148,20 @@ export default function LoginPage() {
               id="password"
               type="password"
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
+              onChange={(e) => {
+                setPassword(e.target.value);
+                setFieldErrors((current) => ({ ...current, password: "" }));
+              }}
+              onBlur={() => {
+                if (isSignUp && password && (!/(?=.*[A-Za-z])(?=.*\d)(?=.*[^A-Za-z\d])/.test(password) || password.length < 8)) {
+                  setFieldErrors((current) => ({ ...current, password: "A senha deve ter pelo menos 8 caracteres, letra, número e caractere especial." }));
+                }
+              }}
+              aria-invalid={Boolean(fieldErrors.password)}
               className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             />
+            {isSignUp && <p className="mt-1 text-xs text-gray-500">Use ao menos 8 caracteres, incluindo letra, número e caractere especial.</p>}
+            {fieldErrors.password && <p className="mt-1 text-sm text-red-600">{fieldErrors.password}</p>}
           </div>
 
           <button
@@ -163,7 +204,11 @@ export default function LoginPage() {
         <p className="mt-4 text-center text-sm text-gray-600">
           {isSignUp ? "Já possui uma conta?" : "Não possui uma conta?"}{" "}
           <button
-            onClick={() => setIsSignUp(!isSignUp)}
+            onClick={() => {
+              setIsSignUp(!isSignUp);
+              setError("");
+              setFieldErrors({});
+            }}
             className="text-blue-600 transition-colors hover:text-blue-800 hover:underline"
           >
             {isSignUp ? "Entrar" : "Cadastrar-se"}
