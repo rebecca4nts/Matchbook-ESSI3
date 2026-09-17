@@ -1,0 +1,23 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Coleção global de livros: { title, author, coverUrl, ownerId, type, status, createdAt }
+    // type: 'offered' | 'wanted' — status: 'available' | 'removed'
+    // A remoção física (deleteDoc) faz o livro deixar de ser exibido
+    // nas buscas globais (Cenário 3.1).
+    match /books/{bookId} {
+      // Leitura pública para permitir buscas globais de livros disponíveis.
+      allow read: if true;
+      allow create: if request.auth != null
+        && request.auth.uid == request.resource.data.ownerId;
+      allow delete: if request.auth.uid == resource.data.ownerId;
+    }
+
+    match /users/{userId} {
+      allow read: if true;
+      allow create, update: if request.auth != null && request.auth.uid == userId;
+      allow delete: if false;
+    }
+  }
+}
