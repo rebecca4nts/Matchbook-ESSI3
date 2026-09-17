@@ -2,16 +2,21 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Coleção global de livros: { title, author, coverUrl, ownerId, type, status, createdAt }
-    // type: 'offered' | 'wanted' — status: 'available' | 'removed'
+    // Coleção global de livros: { userId, ownerId, title, author, genre,
+    // coverUrl, type, status, createdAt }
+    // type: 'OFFERED' | 'WISHED' (legados 'offered' | 'wanted' ainda lidos)
+    // status: 'available' | 'removed'
+    // `ownerId` espelha `userId` por compatibilidade com regras/consultas.
     // A remoção física (deleteDoc) faz o livro deixar de ser exibido
     // nas buscas globais (Cenário 3.1).
     match /books/{bookId} {
       // Leitura pública para permitir buscas globais de livros disponíveis.
       allow read: if true;
       allow create: if request.auth != null
-        && request.auth.uid == request.resource.data.ownerId;
-      allow delete: if request.auth.uid == resource.data.ownerId;
+        && (request.auth.uid == request.resource.data.ownerId
+          || request.auth.uid == request.resource.data.userId);
+      allow delete: if request.auth.uid == resource.data.ownerId
+        || request.auth.uid == resource.data.get('userId', '');
     }
 
     match /users/{userId} {

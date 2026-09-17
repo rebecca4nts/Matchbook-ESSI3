@@ -93,12 +93,8 @@ export default function LoginPage() {
 
   // carrega as cidades do estado escolhido
   useEffect(() => {
-    if (!form.uf) {
-      setCidades([]);
-      return;
-    }
+    if (!form.uf) return;
     let cancelado = false;
-    setCarregandoCidades(true);
     fetch(`https://servicodados.ibge.gov.br/api/v1/localidades/estados/${form.uf}/municipios`)
       .then((res) => res.json())
       .then((data: { nome: string }[]) => {
@@ -122,6 +118,8 @@ export default function LoginPage() {
 
   const handleUfChange = (e: ChangeEvent<HTMLSelectElement>) => {
     setForm((f) => ({ ...f, uf: e.target.value, cidade: "" }));
+    setCidades([]);
+    if (e.target.value) setCarregandoCidades(true);
   };
 
   const handleCidadeChange = (e: ChangeEvent<HTMLSelectElement>) => {
