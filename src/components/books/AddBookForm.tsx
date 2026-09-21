@@ -35,6 +35,8 @@ export function AddBookForm({ userId, onAdded }: AddBookFormProps) {
   const [suggestions, setSuggestions] = useState<GoogleBookSuggestion[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const [hasSearched, setHasSearched] = useState(false);
 
   const [fieldErrors, setFieldErrors] = useState<{
     title?: string;
@@ -47,16 +49,25 @@ export function AddBookForm({ userId, onAdded }: AddBookFormProps) {
 
   const boxRef = useRef<HTMLDivElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Evita que escolher uma sugestão dispare uma nova busca com o título aplicado.
+  const suppressSearchRef = useRef(false);
+  // Ignora respostas de buscas antigas quando o usuário continua digitando.
+  const requestIdRef = useRef(0);
 
   const handleTitleChange = (value: string) => {
+    suppressSearchRef.current = false;
     setTitle(value);
+    setSearchError(null);
     if (value.trim().length < 3) {
+      requestIdRef.current += 1;
       if (debounceRef.current) clearTimeout(debounceRef.current);
       setSuggestions([]);
       setShowSuggestions(false);
       setSearching(false);
+      setHasSearched(false);
     } else {
       setSearching(true);
+      setShowSuggestions(true);
     }
   };
 
@@ -64,18 +75,35 @@ export function AddBookForm({ userId, onAdded }: AddBookFormProps) {
   // setStates acontecem no handler de mudança e no callback do
   // temporizador — nunca de forma síncrona no corpo do efeito.
   useEffect(() => {
+    if (suppressSearchRef.current) {
+      suppressSearchRef.current = false;
+      return;
+    }
     if (title.trim().length < 3) return;
     if (debounceRef.current) clearTimeout(debounceRef.current);
+    const requestId = (requestIdRef.current += 1);
     debounceRef.current = setTimeout(async () => {
+      // Se outra tecla foi pressionada enquanto aguardava o debounce, ignora.
+      if (requestId !== requestIdRef.current) return;
+      setSearching(true);
+      setSearchError(null);
       try {
         const results = await searchGoogleBooks(title.trim());
-        setSuggestions(results);
+        if (requestId !== requestIdRef.current) return;
+        // Ignora itens sem título (não renderizam linha útil no dropdown).
+        setSuggestions(results.filter((r) => r.title.trim().length > 0));
         setShowSuggestions(true);
-      } catch {
+        setHasSearched(true);
+      } catch (err) {
+        if (requestId !== requestIdRef.current) return;
         setSuggestions([]);
-        setShowSuggestions(false);
+        setShowSuggestions(true);
+        setHasSearched(true);
+        setSearchError(
+          err instanceof Error ? err.message : "A busca na Google Books falhou."
+        );
       } finally {
-        setSearching(false);
+        if (requestId === requestIdRef.current) setSearching(false);
       }
     }, 400);
     return () => {
@@ -95,6 +123,9 @@ export function AddBookForm({ userId, onAdded }: AddBookFormProps) {
   }, []);
 
   const applySuggestion = (s: GoogleBookSuggestion) => {
+    suppressSearchRef.current = true;
+    requestIdRef.current += 1;
+    if (debounceRef.current) clearTimeout(debounceRef.current);
     setTitle(s.title);
     if (s.author) setAuthor(s.author);
     if (s.genre) setGenre(s.genre);
@@ -102,7 +133,11 @@ export function AddBookForm({ userId, onAdded }: AddBookFormProps) {
     setGoogleId(s.googleId || undefined);
     setDescription(s.description || undefined);
     setFieldErrors({});
+    setSuggestions([]);
     setShowSuggestions(false);
+    setSearching(false);
+    setSearchError(null);
+    setHasSearched(false);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -140,6 +175,10 @@ export function AddBookForm({ userId, onAdded }: AddBookFormProps) {
       setGoogleId(undefined);
       setDescription(undefined);
       setSuggestions([]);
+      setShowSuggestions(false);
+      setSearching(false);
+      setSearchError(null);
+      setHasSearched(false);
     } catch (err) {
       if (err instanceof BookValidationError) {
         setFieldErrors(err.fields);
@@ -205,9 +244,15 @@ export function AddBookForm({ userId, onAdded }: AddBookFormProps) {
               value={title}
               onChange={(e) => handleTitleChange(e.target.value)}
               onFocus={() => {
-                if (suggestions.length > 0) setShowSuggestions(true);
+                if (suggestions.length > 0 || searchError || hasSearched)
+                  setShowSuggestions(true);
               }}
               placeholder="Digite para buscar na Google Books…"
+              autoComplete="off"
+              role="combobox"
+              aria-expanded={showSuggestions}
+              aria-controls="google-books-suggestions"
+              aria-autocomplete="list"
               aria-invalid={Boolean(fieldErrors.title)}
               className={inputClass}
             />
@@ -219,12 +264,38 @@ export function AddBookForm({ userId, onAdded }: AddBookFormProps) {
             {fieldErrors.title}
           </p>
         )}
-        {showSuggestions && suggestions.length > 0 && (
-          <ul className="absolute z-10 mt-1 max-h-64 w-full overflow-y-auto rounded-md border border-gray-200 bg-white shadow-lg">
-            {suggestions.map((s) => (
-              <li key={s.googleId}>
+        {showSuggestions && (searching || searchError || hasSearched || suggestions.length > 0) && (
+          <ul
+            id="google-books-suggestions"
+            role="listbox"
+            className="absolute z-50 mt-1 max-h-64 w-full overflow-y-auto rounded-md border border-gray-200 bg-white shadow-lg"
+          >
+            {searching && suggestions.length === 0 && (
+              <li className="flex items-center gap-2 px-3 py-3 text-sm text-gray-500">
+                <Loader2 size={16} className="animate-spin shrink-0" />
+                Buscando na Google Books…
+              </li>
+            )}
+            {!searching && searchError && (
+              <li className="px-3 py-3 text-sm text-[#8C3B2E]">{searchError}</li>
+            )}
+            {!searching &&
+              !searchError &&
+              hasSearched &&
+              suggestions.length === 0 && (
+                <li className="px-3 py-3 text-sm text-gray-500">
+                  Nenhum livro encontrado. Tente outro título.
+                </li>
+              )}
+            {suggestions.map((s, index) => (
+              <li key={s.googleId || `${s.title}-${index}`} role="option" aria-selected={false}>
                 <button
                   type="button"
+                  onMouseDown={(e) => {
+                    // Seleciona antes do clique fora fechar a lista.
+                    e.preventDefault();
+                    applySuggestion(s);
+                  }}
                   onClick={() => applySuggestion(s)}
                   className="flex w-full items-center gap-3 px-3 py-2 text-left hover:bg-gray-50 cursor-pointer"
                 >

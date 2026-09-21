@@ -1,8 +1,9 @@
 import { describe, expect, it, vi, afterEach } from "vitest";
-import { mapGoogleBookItem, searchGoogleBooks } from "./google-books";
+import { clearGoogleBooksCache, mapGoogleBookItem, searchGoogleBooks } from "./google-books";
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  clearGoogleBooksCache();
 });
 
 describe("mapGoogleBookItem", () => {
@@ -81,11 +82,34 @@ describe("searchGoogleBooks", () => {
   });
 
   it("lança erro amigável quando a API responde com falha", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false }));
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 500 }));
 
     await expect(searchGoogleBooks("O Hobbit")).rejects.toThrow(
       "Google Books"
     );
+  });
+
+  it("lança erro de quota quando a API responde 429", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({ ok: false, status: 429 })
+    );
+
+    await expect(searchGoogleBooks("O Hobbit")).rejects.toThrow(/429|Limite/);
+  });
+
+  it("usa cache para não gastar quota em buscas repetidas", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ items: [] }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await searchGoogleBooks("O Hobbit");
+    await searchGoogleBooks("O Hobbit");
+
+    expect(fetchMock).toHaveBeenCalledOnce();
   });
 
   it("lança erro amigável quando há falha de rede", async () => {
