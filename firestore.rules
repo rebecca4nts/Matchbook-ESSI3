@@ -23,5 +23,19 @@ service cloud.firestore {
       allow create, read, update: if request.auth != null && request.auth.uid == userId;
       allow delete: if false;
     }
+
+    match /publicProfiles/{userId} {
+      allow read: if request.auth != null;
+      allow create, update: if request.auth != null
+        && request.auth.uid == userId
+        && request.resource.data.keys().hasOnly(['displayName', 'city', 'state', 'latitude', 'longitude'])
+        && request.resource.data.keys().hasAll(['displayName', 'city', 'state', 'latitude', 'longitude'])
+        && request.resource.data.displayName is string
+        && request.resource.data.city is string
+        && request.resource.data.state is string
+        && (request.resource.data.latitude == null || request.resource.data.latitude is number)
+        && (request.resource.data.longitude == null || request.resource.data.longitude is number);
+      allow delete: if false;
+    }
   }
 }

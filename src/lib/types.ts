@@ -1,7 +1,14 @@
+export interface Coordinates {
+  latitude: number;
+  longitude: number;
+}
+
 export interface UserProfile {
   displayName: string;
   city: string;
   state: string;
+  latitude?: number | null;
+  longitude?: number | null;
   createdAt?: string;
 }
 

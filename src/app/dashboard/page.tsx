@@ -17,6 +17,8 @@ import LocationInput from "@/components/LocationInput";
 import { AddBookForm } from "@/components/books/AddBookForm";
 import { useAuth } from "@/lib/auth-context";
 import { Book, getUserBooks, removeBook } from "@/lib/book-service";
+import { getApproximateCoordinates } from "@/lib/geolocation";
+import type { Coordinates } from "@/lib/types";
 
 type Tab = "ALL" | "OFFERED" | "WISHED";
 
@@ -53,6 +55,9 @@ export default function DashboardPage() {
   const [profileLocation, setProfileLocation] = useState("");
   const [profileCity, setProfileCity] = useState("");
   const [profileState, setProfileState] = useState("");
+  const [profileCoordinates, setProfileCoordinates] = useState<Coordinates | null>(null);
+  const [locationNotice, setLocationNotice] = useState("");
+  const [requestingLocation, setRequestingLocation] = useState(false);
   const [profileError, setProfileError] = useState("");
   const [profileNotice, setProfileNotice] = useState("");
   const [publicationNotice, setPublicationNotice] = useState("");
@@ -101,6 +106,10 @@ export default function DashboardPage() {
     setProfileName(profile?.displayName || user?.displayName || "");
     setProfileCity(profile?.city || "");
     setProfileState(profile?.state || "");
+    setProfileCoordinates(typeof profile?.latitude === "number" && typeof profile?.longitude === "number"
+      ? { latitude: profile.latitude, longitude: profile.longitude }
+      : null);
+    setLocationNotice("");
     setProfileLocation(profile?.city && profile?.state ? `${profile.city}, ${profile.state}` : "");
     setProfileError("");
     setProfileNotice("");
@@ -122,6 +131,8 @@ export default function DashboardPage() {
         displayName: profileName.trim(),
         city: profileCity,
         state: profileState,
+        latitude: profileCoordinates?.latitude ?? null,
+        longitude: profileCoordinates?.longitude ?? null,
       });
       setProfileNotice("Perfil atualizado.");
       setEditingProfile(false);
@@ -173,6 +184,13 @@ export default function DashboardPage() {
             Matchbook
           </Link>
           <nav aria-label="Navegação da conta" className="flex items-center gap-2">
+            <Link
+              href="/discover"
+              className="inline-flex min-h-11 items-center gap-2 rounded-[2px] border border-[#EDE6D6]/20 px-4 py-2.5 text-sm font-medium text-[#EDE6D6] transition-colors hover:bg-[#EDE6D6]/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#EDE6D6]"
+            >
+              <Heart size={16} aria-hidden="true" />
+              Descobrir
+            </Link>
             <button
               type="button"
               onClick={() => addBookDialogRef.current?.showModal()}
@@ -357,9 +375,31 @@ export default function DashboardPage() {
                         setProfileLocation(value);
                         setProfileCity(selected?.city || "");
                         setProfileState(selected?.stateCode || "");
+                        setProfileCoordinates(null);
                       }}
                     />
                     <p className="mt-1 text-xs text-[#1B2530]/60">Escolha uma sugestão para confirmar sua localização.</p>
+                    <button
+                      type="button"
+                      disabled={requestingLocation}
+                      onClick={async () => {
+                        setRequestingLocation(true);
+                        try {
+                          setProfileCoordinates(await getApproximateCoordinates());
+                          setLocationNotice("Localização aproximada ativada para ordenar resultados próximos.");
+                        } catch (locationError) {
+                          setProfileCoordinates(null);
+                          setLocationNotice(locationError instanceof Error ? `${locationError.message} A busca usará cidade e estado.` : "A busca usará cidade e estado.");
+                        } finally {
+                          setRequestingLocation(false);
+                        }
+                      }}
+                      className="mt-2 min-h-10 text-left text-sm font-medium text-[#762F25] underline-offset-2 hover:underline disabled:opacity-60"
+                    >
+                      {requestingLocation ? "Obtendo localização..." : profileCoordinates ? "Localização aproximada ativada" : "Ativar localização aproximada (opcional)"}
+                    </button>
+                    <p className="mt-1 text-xs text-[#1B2530]/60">Coordenadas arredondadas para ordenar perfis; sem permissão, usamos cidade e estado.</p>
+                    {locationNotice && <p role="status" className="mt-1 text-xs text-[#1B2530]/70">{locationNotice}</p>}
                   </div>
                   {profileError && <p role="alert" className="text-sm text-[#8C3B2E]">{profileError}</p>}
                   <div className="flex gap-2">

@@ -57,6 +57,12 @@ export function AddBookForm({ userId, onAdded }: AddBookFormProps) {
   const handleTitleChange = (value: string) => {
     suppressSearchRef.current = false;
     setTitle(value);
+    setAuthor("");
+    setGenre("");
+    setCoverUrl("");
+    setGoogleId(undefined);
+    setDescription(undefined);
+    setFieldErrors({});
     setSearchError(null);
     if (value.trim().length < 3) {
       requestIdRef.current += 1;
@@ -127,8 +133,8 @@ export function AddBookForm({ userId, onAdded }: AddBookFormProps) {
     requestIdRef.current += 1;
     if (debounceRef.current) clearTimeout(debounceRef.current);
     setTitle(s.title);
-    if (s.author) setAuthor(s.author);
-    if (s.genre) setGenre(s.genre);
+    setAuthor(s.author);
+    setGenre(s.genre);
     setCoverUrl(s.coverUrl);
     setGoogleId(s.googleId || undefined);
     setDescription(s.description || undefined);
@@ -148,8 +154,13 @@ export function AddBookForm({ userId, onAdded }: AddBookFormProps) {
     // Validação local (Cenário 2.1): impede o envio e alerta os campos.
     const localErrors: typeof fieldErrors = {};
     if (!title.trim()) localErrors.title = "Título é obrigatório.";
-    if (!author.trim()) localErrors.author = "Autor é obrigatório.";
-    if (!genre.trim()) localErrors.genre = "Gênero é obrigatório.";
+    if (!googleId) {
+      localErrors.author = "Selecione um livro da Google Books para preencher os metadados.";
+      localErrors.genre = "Selecione um livro da Google Books para preencher os metadados.";
+    } else {
+      if (!author.trim()) localErrors.author = "A Google Books não retornou o autor para este livro.";
+      if (!genre.trim()) localErrors.genre = "A Google Books não retornou o gênero para este livro.";
+    }
     setFieldErrors(localErrors);
     if (Object.keys(localErrors).length > 0) return;
 
@@ -322,18 +333,23 @@ export function AddBookForm({ userId, onAdded }: AddBookFormProps) {
         )}
       </div>
 
+      <p id="book-metadata-source" className="text-xs text-[#1B2530]/55">
+        Autor e gênero são importados da Google Books após selecionar um resultado.
+      </p>
+
       <div>
         <label className="block">
           <span className="block text-[13px] text-[#5C6B4F] mb-1.5 font-medium tracking-wide">
-            Autor *
+            Autor * <span className="font-normal text-[#1B2530]/50">(Google Books)</span>
           </span>
-          <div className="flex items-center gap-2 border-b border-[#1B2530]/25 focus-within:border-[#8C3B2E] transition-colors pb-2">
+          <div className="flex items-center gap-2 border-b border-[#1B2530]/15 pb-2">
             <input
               value={author}
-              onChange={(e) => setAuthor(e.target.value)}
-              placeholder="Ex.: J.R.R. Tolkien"
+              disabled
+              placeholder="Preenchido ao selecionar um livro"
               aria-invalid={Boolean(fieldErrors.author)}
-              className={inputClass}
+              aria-describedby="book-metadata-source"
+              className={`${inputClass} cursor-not-allowed text-[#1B2530]/60 disabled:opacity-100`}
             />
           </div>
         </label>
@@ -347,15 +363,16 @@ export function AddBookForm({ userId, onAdded }: AddBookFormProps) {
       <div>
         <label className="block">
           <span className="block text-[13px] text-[#5C6B4F] mb-1.5 font-medium tracking-wide">
-            Gênero *
+            Gênero * <span className="font-normal text-[#1B2530]/50">(Google Books)</span>
           </span>
-          <div className="flex items-center gap-2 border-b border-[#1B2530]/25 focus-within:border-[#8C3B2E] transition-colors pb-2">
+          <div className="flex items-center gap-2 border-b border-[#1B2530]/15 pb-2">
             <input
               value={genre}
-              onChange={(e) => setGenre(e.target.value)}
-              placeholder="Ex.: Fantasia"
+              disabled
+              placeholder="Preenchido ao selecionar um livro"
               aria-invalid={Boolean(fieldErrors.genre)}
-              className={inputClass}
+              aria-describedby="book-metadata-source"
+              className={`${inputClass} cursor-not-allowed text-[#1B2530]/60 disabled:opacity-100`}
             />
           </div>
         </label>

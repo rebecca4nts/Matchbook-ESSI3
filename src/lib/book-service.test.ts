@@ -4,6 +4,7 @@ import {
   collection,
   deleteDoc,
   doc,
+  getDoc,
   getDocs,
   query,
   where,
@@ -12,6 +13,8 @@ import {
   addBook,
   BookValidationError,
   getUserBooks,
+  getDiscoverableBooks,
+  getPublicProfile,
   normalizeBookType,
   removeBook,
   validateBookInput,
@@ -22,6 +25,7 @@ vi.mock("firebase/firestore", () => ({
   collection: vi.fn(),
   deleteDoc: vi.fn(),
   doc: vi.fn(),
+  getDoc: vi.fn(),
   getDocs: vi.fn(),
   query: vi.fn(),
   where: vi.fn(),
@@ -35,6 +39,7 @@ const mockedAddDoc = vi.mocked(addDoc);
 const mockedCollection = vi.mocked(collection);
 const mockedDeleteDoc = vi.mocked(deleteDoc);
 const mockedDoc = vi.mocked(doc);
+const mockedGetDoc = vi.mocked(getDoc);
 const mockedGetDocs = vi.mocked(getDocs);
 const mockedQuery = vi.mocked(query);
 const mockedWhere = vi.mocked(where);
@@ -239,6 +244,37 @@ describe("getUserBooks", () => {
     await expect(getUserBooks("user-1")).rejects.toThrow(
       "firestore indisponível"
     );
+  });
+});
+
+describe("getDiscoverableBooks", () => {
+  it("retorna livros disponíveis usando userId legado quando ownerId não existe", async () => {
+    mockedGetDocs.mockResolvedValue({
+      docs: [
+        docSnapshot("available", { userId: "reader", title: "Duna", author: "Frank Herbert", type: "offered", status: "available" }),
+        docSnapshot("removed", { userId: "reader", title: "Antigo", author: "A", type: "offered", status: "removed" }),
+      ],
+    } as never);
+
+    await expect(getDiscoverableBooks()).resolves.toMatchObject([
+      { id: "available", userId: "reader", type: "OFFERED" },
+    ]);
+  });
+});
+
+describe("getPublicProfile", () => {
+  it("lê somente a projeção pública e não retorna dados extras", async () => {
+    // @ts-expect-error valores mockados
+    mockedDoc.mockReturnValue("public-profile-ref");
+    mockedGetDoc.mockResolvedValue({
+      exists: () => true,
+      data: () => ({ displayName: "Leitor", city: "Recife", state: "PE", latitude: -8.05, longitude: -34.9, email: "private@example.com" }),
+    } as never);
+
+    await expect(getPublicProfile("reader")).resolves.toEqual({
+      displayName: "Leitor", city: "Recife", state: "PE", latitude: -8.05, longitude: -34.9,
+    });
+    expect(mockedDoc).toHaveBeenCalledWith({}, "publicProfiles", "reader");
   });
 });
 

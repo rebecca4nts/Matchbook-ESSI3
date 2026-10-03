@@ -2,6 +2,8 @@
 
 import LocationInput from "@/components/LocationInput";
 import { useAuth } from "@/lib/auth-context";
+import { getApproximateCoordinates } from "@/lib/geolocation";
+import type { Coordinates } from "@/lib/types";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
@@ -12,6 +14,9 @@ export default function LoginPage() {
   const [location, setLocation] = useState("");
   const [city, setCity] = useState("");
   const [state, setState] = useState("");
+  const [coordinates, setCoordinates] = useState<Coordinates | null>(null);
+  const [locationNotice, setLocationNotice] = useState("");
+  const [requestingLocation, setRequestingLocation] = useState(false);
   const [isSignUp, setIsSignUp] = useState(false);
   const [error, setError] = useState("");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -61,6 +66,7 @@ export default function LoginPage() {
           displayName: name.trim(),
           city,
           state,
+          ...(coordinates || {}),
         });
       } else {
         await signInWithEmail(normalizedEmail, password);
@@ -184,6 +190,7 @@ export default function LoginPage() {
                       setLocation(value);
                       setCity(selectedLocation?.city || "");
                       setState(selectedLocation?.stateCode || "");
+                      setCoordinates(null);
                       setFieldErrors((current) => ({
                         ...current,
                         location: "",
@@ -195,6 +202,27 @@ export default function LoginPage() {
                       {fieldErrors.location}
                     </p>
                   )}
+                  <button
+                    type="button"
+                    disabled={requestingLocation}
+                    onClick={async () => {
+                      setRequestingLocation(true);
+                      try {
+                        setCoordinates(await getApproximateCoordinates());
+                        setLocationNotice("Localização aproximada ativada para ordenar resultados próximos.");
+                      } catch (locationError) {
+                        setCoordinates(null);
+                        setLocationNotice(locationError instanceof Error ? `${locationError.message} A busca usará cidade e estado.` : "A busca usará cidade e estado.");
+                      } finally {
+                        setRequestingLocation(false);
+                      }
+                    }}
+                    className="mt-2 min-h-10 text-left text-sm font-medium text-[#762F25] underline-offset-2 hover:underline disabled:opacity-60"
+                  >
+                    {requestingLocation ? "Obtendo localização..." : coordinates ? "Localização aproximada ativada" : "Ativar localização aproximada (opcional)"}
+                  </button>
+                  <p className="mt-1 text-xs text-[#1B2530]/60">As coordenadas são arredondadas e usadas somente para ordenar perfis por proximidade. Sem permissão, a busca usa cidade e estado.</p>
+                  {locationNotice && <p role="status" className="mt-1 text-xs text-[#1B2530]/70">{locationNotice}</p>}
                 </div>
               </>
             )}

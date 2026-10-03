@@ -3,11 +3,13 @@ import {
   collection,
   deleteDoc,
   doc,
+  getDoc,
   getDocs,
   query,
   where,
 } from "firebase/firestore";
 import { db } from "./firebase";
+import type { UserProfile } from "./types";
 
 /** Tipo canônico do Firestore (Cenário 4.1). */
 export type BookType = "OFFERED" | "WISHED";
@@ -151,6 +153,39 @@ export async function getUserBooks(uid: string): Promise<Book[]> {
 
   books.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   return books;
+}
+
+export async function getDiscoverableBooks(): Promise<Book[]> {
+  const snapshot = await getDocs(collection(db, BOOKS_COLLECTION));
+  return snapshot.docs
+    .map((d) => toBook(d.id, d.data() as Record<string, unknown>))
+    .filter((book) => book.status === "available");
+}
+
+export async function getPublicProfile(uid: string): Promise<UserProfile | null> {
+  const snapshot = await getDoc(doc(db, "publicProfiles", uid));
+  if (!snapshot.exists()) return null;
+  const data = snapshot.data();
+  const legacyLocation = typeof data.location === "string" ? data.location : "";
+  const [legacyCity = "", legacyState = ""] = legacyLocation.split(",").map((value) => value.trim());
+  return {
+    displayName: typeof data.displayName === "string" ? data.displayName : "Leitor(a)",
+    city: typeof data.city === "string" ? data.city : legacyCity,
+    state: typeof data.state === "string" ? data.state : legacyState,
+    ...(typeof data.latitude === "number" ? { latitude: data.latitude } : {}),
+    ...(typeof data.longitude === "number" ? { longitude: data.longitude } : {}),
+  };
+}
+
+export async function getPublicProfiles(uids: string[]): Promise<Map<string, UserProfile>> {
+  const entries = await Promise.all(uids.map(async (uid) => [uid, await getPublicProfile(uid)] as const));
+  return new Map(entries.filter((entry): entry is readonly [string, UserProfile] => entry[1] !== null));
+}
+
+export async function getUserPublicBooks(uid: string): Promise<Book[]> {
+  return (await getDiscoverableBooks())
+    .filter((book) => book.userId === uid)
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
 
 /**
