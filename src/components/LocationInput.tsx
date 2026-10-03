@@ -223,7 +223,7 @@ export default function LocationInput({ value, onChange, required }: LocationInp
         }}
         placeholder="Digite cidade ou estado..."
         required={required}
-        className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+        className="mt-1 block min-h-11 w-full rounded-[2px] border border-[#1B2530]/20 bg-white/70 px-3 py-2 text-base text-[#1B2530] shadow-sm placeholder:text-[#1B2530]/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#762F25]"
       />
 
       {isLoading && (
