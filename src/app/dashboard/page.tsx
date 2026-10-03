@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { BookOpen, Heart, Library, Trash2 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
@@ -93,12 +94,20 @@ export default function DashboardPage() {
               Boas vindas, {user.displayName ?? user.email}
             </p>
           </div>
-          <button
-            onClick={handleSignOut}
-            className="rounded-md bg-gray-200 px-4 py-2 text-gray-700 hover:bg-gray-300 cursor-pointer"
-          >
-            Sair
-          </button>
+          <div className="flex items-center gap-2">
+            <Link
+              href="/profile"
+              className="rounded-md bg-gray-200 px-4 py-2 text-gray-700 hover:bg-gray-300"
+            >
+              Meu perfil
+            </Link>
+            <button
+              onClick={handleSignOut}
+              className="rounded-md bg-gray-200 px-4 py-2 text-gray-700 hover:bg-gray-300 cursor-pointer"
+            >
+              Sair
+            </button>
+          </div>
         </div>
 
         {/* Cadastro de livros */}
