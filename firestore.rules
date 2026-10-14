@@ -1,10 +1,40 @@
 rules_version = '2';
-
 service cloud.firestore {
   match /databases/{database}/documents {
+
+    // Coleção global de livros: { userId, ownerId, title, author, genre,
+    // coverUrl, type, status, createdAt }
+    // type: 'OFFERED' | 'WISHED' (legados 'offered' | 'wanted' ainda lidos)
+    // status: 'available' | 'removed'
+    // `ownerId` espelha `userId` por compatibilidade com regras/consultas.
+    // A remoção física (deleteDoc) faz o livro deixar de ser exibido
+    // nas buscas globais (Cenário 3.1).
+    match /books/{bookId} {
+      // Leitura pública para permitir buscas globais de livros disponíveis.
+      allow read: if true;
+      allow create: if request.auth != null
+        && (request.auth.uid == request.resource.data.ownerId
+          || request.auth.uid == request.resource.data.userId);
+      allow delete: if request.auth.uid == resource.data.ownerId
+        || request.auth.uid == resource.data.get('userId', '');
+    }
+
     match /users/{userId} {
-      allow create: if request.auth != null && request.auth.uid == userId;
-      allow read, update: if request.auth != null && request.auth.uid == userId;
+      allow create, read, update: if request.auth != null && request.auth.uid == userId;
+      allow delete: if false;
+    }
+
+    match /publicProfiles/{userId} {
+      allow read: if request.auth != null;
+      allow create, update: if request.auth != null
+        && request.auth.uid == userId
+        && request.resource.data.keys().hasOnly(['displayName', 'city', 'state', 'latitude', 'longitude'])
+        && request.resource.data.keys().hasAll(['displayName', 'city', 'state', 'latitude', 'longitude'])
+        && request.resource.data.displayName is string
+        && request.resource.data.city is string
+        && request.resource.data.state is string
+        && (request.resource.data.latitude == null || request.resource.data.latitude is number)
+        && (request.resource.data.longitude == null || request.resource.data.longitude is number);
       allow delete: if false;
     }
   }
