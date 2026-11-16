@@ -52,7 +52,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       unsubscribeProfile = onSnapshot(
         doc(db, "users", currentUser.uid),
         (snapshot) => {
-          setProfile(snapshot.exists() ? toProfile(snapshot.data()) : null);
+          const nextProfile = snapshot.exists() ? toProfile(snapshot.data()) : null;
+          setProfile(nextProfile);
+          if (nextProfile) void syncPublicProfile(currentUser.uid, nextProfile).catch(() => undefined);
           setLoading(false);
         },
         () => setLoading(false)
@@ -80,10 +82,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const credential = await createUserWithEmailAndPassword(auth, email, password);
       await updateProfile(credential.user, { displayName: profile.displayName });
-      await setDoc(doc(db, "users", credential.user.uid), {
+      const profileDocument = {
         ...profile,
         createdAt: new Date().toISOString(),
-      });
+      };
+      await Promise.all([
+        setDoc(doc(db, "users", credential.user.uid), profileDocument),
+        syncPublicProfile(credential.user.uid, profileDocument),
+      ]);
     } catch (error: unknown) {
       throw new Error(mapAuthError(error));
     }
@@ -95,12 +101,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const profileReference = doc(db, "users", credential.user.uid);
     const existingProfile = await getDoc(profileReference);
     if (!existingProfile.exists()) {
-      await setDoc(profileReference, {
+      const profileDocument = {
         displayName: credential.user.displayName || "Leitor(a)",
         city: "",
         state: "",
         createdAt: new Date().toISOString(),
-      });
+      };
+      await Promise.all([setDoc(profileReference, profileDocument), syncPublicProfile(credential.user.uid, profileDocument)]);
+    } else {
+      await syncPublicProfile(credential.user.uid, toProfile(existingProfile.data()));
     }
   };
 
@@ -108,7 +117,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!auth.currentUser) throw new Error("Você precisa estar autenticado para editar o perfil.");
     try {
       await updateProfile(auth.currentUser, { displayName: nextProfile.displayName });
-      await setDoc(doc(db, "users", auth.currentUser.uid), nextProfile, { merge: true });
+      await Promise.all([
+        setDoc(doc(db, "users", auth.currentUser.uid), nextProfile, { merge: true }),
+        syncPublicProfile(auth.currentUser.uid, nextProfile),
+      ]);
     } catch (error: unknown) {
       const code = typeof error === "object" && error && "code" in error ? String(error.code) : "";
       if (code === "permission-denied") throw new Error("Sem permissão para salvar o perfil. Publique as regras do Firestore incluídas no projeto.");
@@ -153,4 +165,12 @@ function toProfile(data: Record<string, unknown>): UserProfile {
     state: typeof data.state === "string" ? data.state : legacyState,
     ...(typeof data.createdAt === "string" ? { createdAt: data.createdAt } : {}),
   };
+}
+
+async function syncPublicProfile(userId: string, profile: UserProfile) {
+  await setDoc(doc(db, "publicProfiles", userId), {
+    displayName: profile.displayName,
+    city: profile.city,
+    state: profile.state,
+  }, { merge: true });
 }
