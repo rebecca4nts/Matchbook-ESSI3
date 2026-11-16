@@ -15,8 +15,9 @@ service cloud.firestore {
       allow create: if request.auth != null
         && (request.auth.uid == request.resource.data.ownerId
           || request.auth.uid == request.resource.data.userId);
-      allow delete: if request.auth.uid == resource.data.ownerId
-        || request.auth.uid == resource.data.get('userId', '');
+      allow delete: if request.auth != null
+        && (request.auth.uid == resource.data.ownerId
+          || request.auth.uid == resource.data.get('userId', ''));
     }
 
     match /users/{userId} {

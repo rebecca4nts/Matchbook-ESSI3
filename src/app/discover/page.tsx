@@ -42,8 +42,9 @@ export default function DiscoverPage() {
           currentProfile: profile,
         });
         setMatches(nextMatches);
-        setHasRegionalMatch(nextMatches.some((match) => match.profile.state === profile.state));
-        setRegionalSuggestions(nextMatches.length ? [] : findRegionalSuggestions({
+        const regionalMatch = nextMatches.some((match) => match.profile.state === profile.state);
+        setHasRegionalMatch(regionalMatch);
+        setRegionalSuggestions(regionalMatch ? [] : findRegionalSuggestions({
           currentUserId: user.uid,
           currentProfile: profile,
           books: allBooks,
