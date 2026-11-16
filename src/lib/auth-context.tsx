@@ -52,9 +52,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       unsubscribeProfile = onSnapshot(
         doc(db, "users", currentUser.uid),
         (snapshot) => {
-          const nextProfile = snapshot.exists() ? toProfile(snapshot.data()) : null;
-          setProfile(nextProfile);
-          if (nextProfile) void syncPublicProfile(currentUser.uid, nextProfile).catch(() => undefined);
+          setProfile(snapshot.exists() ? toProfile(snapshot.data()) : null);
           setLoading(false);
         },
         () => setLoading(false)
@@ -68,7 +66,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signInWithEmail = async (email: string, password: string) => {
     try {
-      await signInWithEmailAndPassword(auth, email, password);
+      const credential = await signInWithEmailAndPassword(auth, email, password);
+      const profileSnapshot = await getDoc(doc(db, "users", credential.user.uid));
+      if (profileSnapshot.exists()) {
+        await setDoc(doc(db, "publicProfiles", credential.user.uid), publicProfileData(profileSnapshot.data()));
+      }
     } catch (error: unknown) {
       throw new Error(mapAuthError(error));
     }
@@ -82,14 +84,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const credential = await createUserWithEmailAndPassword(auth, email, password);
       await updateProfile(credential.user, { displayName: profile.displayName });
-      const profileDocument = {
-        ...profile,
-        createdAt: new Date().toISOString(),
-      };
-      await Promise.all([
-        setDoc(doc(db, "users", credential.user.uid), profileDocument),
-        syncPublicProfile(credential.user.uid, profileDocument),
-      ]);
+      const profileData = { ...profile, createdAt: new Date().toISOString() };
+      await setDoc(doc(db, "users", credential.user.uid), profileData);
+      await setDoc(doc(db, "publicProfiles", credential.user.uid), publicProfileData(profileData));
     } catch (error: unknown) {
       throw new Error(mapAuthError(error));
     }
@@ -101,15 +98,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const profileReference = doc(db, "users", credential.user.uid);
     const existingProfile = await getDoc(profileReference);
     if (!existingProfile.exists()) {
-      const profileDocument = {
+      const profileData = {
         displayName: credential.user.displayName || "Leitor(a)",
         city: "",
         state: "",
         createdAt: new Date().toISOString(),
       };
-      await Promise.all([setDoc(profileReference, profileDocument), syncPublicProfile(credential.user.uid, profileDocument)]);
+      await setDoc(profileReference, profileData);
+      await setDoc(doc(db, "publicProfiles", credential.user.uid), publicProfileData(profileData));
     } else {
-      await syncPublicProfile(credential.user.uid, toProfile(existingProfile.data()));
+      await setDoc(doc(db, "publicProfiles", credential.user.uid), publicProfileData(existingProfile.data()));
     }
   };
 
@@ -117,10 +115,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!auth.currentUser) throw new Error("Você precisa estar autenticado para editar o perfil.");
     try {
       await updateProfile(auth.currentUser, { displayName: nextProfile.displayName });
-      await Promise.all([
-        setDoc(doc(db, "users", auth.currentUser.uid), nextProfile, { merge: true }),
-        syncPublicProfile(auth.currentUser.uid, nextProfile),
-      ]);
+      await setDoc(doc(db, "users", auth.currentUser.uid), nextProfile, { merge: true });
+      await setDoc(doc(db, "publicProfiles", auth.currentUser.uid), publicProfileData(nextProfile));
     } catch (error: unknown) {
       const code = typeof error === "object" && error && "code" in error ? String(error.code) : "";
       if (code === "permission-denied") throw new Error("Sem permissão para salvar o perfil. Publique as regras do Firestore incluídas no projeto.");
@@ -156,6 +152,18 @@ function mapAuthError(error: unknown): string {
   return "Não foi possível concluir a operação. Tente novamente.";
 }
 
+function publicProfileData(data: Record<string, unknown>) {
+  const legacyLocation = typeof data.location === "string" ? data.location : "";
+  const [legacyCity = "", legacyState = ""] = legacyLocation.split(",").map((value) => value.trim());
+  return {
+    displayName: typeof data.displayName === "string" ? data.displayName : "Leitor(a)",
+    city: typeof data.city === "string" ? data.city : legacyCity,
+    state: typeof data.state === "string" ? data.state : legacyState,
+    latitude: typeof data.latitude === "number" ? data.latitude : null,
+    longitude: typeof data.longitude === "number" ? data.longitude : null,
+  };
+}
+
 function toProfile(data: Record<string, unknown>): UserProfile {
   const legacyLocation = typeof data.location === "string" ? data.location : "";
   const [legacyCity = "", legacyState = ""] = legacyLocation.split(",").map((value) => value.trim());
@@ -163,14 +171,8 @@ function toProfile(data: Record<string, unknown>): UserProfile {
     displayName: typeof data.displayName === "string" ? data.displayName : "Leitor(a)",
     city: typeof data.city === "string" ? data.city : legacyCity,
     state: typeof data.state === "string" ? data.state : legacyState,
+    ...(typeof data.latitude === "number" ? { latitude: data.latitude } : {}),
+    ...(typeof data.longitude === "number" ? { longitude: data.longitude } : {}),
     ...(typeof data.createdAt === "string" ? { createdAt: data.createdAt } : {}),
   };
-}
-
-async function syncPublicProfile(userId: string, profile: UserProfile) {
-  await setDoc(doc(db, "publicProfiles", userId), {
-    displayName: profile.displayName,
-    city: profile.city,
-    state: profile.state,
-  }, { merge: true });
 }

@@ -57,3 +57,19 @@ Projeto desenvolvido para a disciplina de **Engenharia de Software para Sistemas
 
 5. **Acesse a aplicação:**
    Acesse [http://localhost:3000](http://localhost:3000) no navegador.
+
+---
+
+## 🧪 Testes
+
+Testes unitários com [Vitest](https://vitest.dev/) (mocks do Firestore, sem tocar no banco real):
+
+```bash
+npm test
+```
+
+Para rodar em modo watch durante o desenvolvimento:
+
+```bash
+npx vitest
+```

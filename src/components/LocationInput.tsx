@@ -1,61 +1,12 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
+import { fetchIbgeCities, fetchIbgeStates } from "@/lib/ibge-locations";
 
 interface Location {
   city: string;
   state: string;
   stateCode: string;
-}
-
-interface IbgeState {
-  id: number;
-  sigla: string;
-  nome: string;
-}
-
-interface IbgeCity {
-  id: number;
-  nome: string;
-  microrregiao: {
-    mesorregiao: {
-      UF: {
-        id: number;
-        sigla: string;
-        nome: string;
-      };
-    };
-  };
-}
-
-const IBGE_API = "https://servicodados.ibge.gov.br/api/v1/localidades";
-const CACHE_TTL = 24 * 60 * 60 * 1000;
-
-let statesCache: IbgeState[] | null = null;
-let statesCacheTime = 0;
-const citiesCache = new Map<string, { data: IbgeCity[]; time: number }>();
-
-async function fetchStates(): Promise<IbgeState[]> {
-  if (statesCache && Date.now() - statesCacheTime < CACHE_TTL) {
-    return statesCache;
-  }
-  const res = await fetch(`${IBGE_API}/estados?orderBy=nome`);
-  if (!res.ok) throw new Error("Erro ao carregar estados");
-  statesCache = await res.json();
-  statesCacheTime = Date.now();
-  return statesCache!;
-}
-
-async function fetchCitiesByState(stateCode: string): Promise<IbgeCity[]> {
-  const cached = citiesCache.get(stateCode);
-  if (cached && Date.now() - cached.time < CACHE_TTL) {
-    return cached.data;
-  }
-  const res = await fetch(`${IBGE_API}/estados/${stateCode}/municipios?orderBy=nome`);
-  if (!res.ok) throw new Error("Erro ao carregar cidades");
-  const data = await res.json();
-  citiesCache.set(stateCode, { data, time: Date.now() });
-  return data;
 }
 
 function normalize(text: string): string {
@@ -93,7 +44,7 @@ export default function LocationInput({ value, onChange, required }: LocationInp
     const normalizedQuery = normalize(searchQuery);
 
     try {
-      const states = await fetchStates();
+      const states = await fetchIbgeStates();
       const matchedStates = states.filter((s) =>
         normalize(s.nome).includes(normalizedQuery) || normalize(s.sigla).includes(normalizedQuery)
       );
@@ -101,7 +52,7 @@ export default function LocationInput({ value, onChange, required }: LocationInp
       const locations: Location[] = [];
 
       for (const state of matchedStates.slice(0, 3)) {
-        const cities = await fetchCitiesByState(state.sigla);
+        const cities = await fetchIbgeCities(state.sigla);
         for (const city of cities.slice(0, 5)) {
           locations.push({
             city: city.nome,
@@ -117,7 +68,7 @@ export default function LocationInput({ value, onChange, required }: LocationInp
 
         for (const state of allStates) {
           if (locations.length >= 10) break;
-          const cities = await fetchCitiesByState(state.sigla);
+          const cities = await fetchIbgeCities(state.sigla);
           const matchedCities = cities.filter((c) => normalize(c.nome).includes(normalizedQuery));
           for (const city of matchedCities) {
             if (locations.length >= 10) break;
@@ -223,7 +174,7 @@ export default function LocationInput({ value, onChange, required }: LocationInp
         }}
         placeholder="Digite cidade ou estado..."
         required={required}
-        className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+        className="mt-1 block min-h-11 w-full rounded-[2px] border border-[#1B2530]/20 bg-white/70 px-3 py-2 text-base text-[#1B2530] shadow-sm placeholder:text-[#1B2530]/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#762F25]"
       />
 
       {isLoading && (
